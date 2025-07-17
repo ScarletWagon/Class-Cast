@@ -1,0 +1,85 @@
+body {
+  font-family: Arial, sans-serif;
+  background: #f7f7fa;
+  margin: 0;
+  padding: 0;
+}
+.container {
+  max-width: 400px;
+  margin: 40px auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 2em 2em 1.5em 2em;
+}
+h1 {
+  text-align: center;
+  color: #2a3a4a;
+}
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+}
+#dropZone {
+  border: 2px dashed #aaa;
+  border-radius: 6px;
+  padding: 1.5em;
+  text-align: center;
+  color: #888;
+  background: #f0f0f5;
+  margin-bottom: 1em;
+  transition: border-color 0.2s;
+}
+#dropZone.dragover {
+  border-color: #007bff;
+  color: #007bff;
+}
+button {
+  background: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.7em 1.2em;
+  font-size: 1em;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+button:hover {
+  background: #0056b3;
+}
+#errorSection, .error {
+  color: #c00;
+  margin-top: 1em;
+  text-align: center;
+}
+#codeDisplay {
+  font-size: 2.2em;
+  font-weight: bold;
+  letter-spacing: 0.2em;
+  color: #007bff;
+  text-align: center;
+  margin: 0.5em 0;
+}
+#timer {
+  font-size: 1.2em;
+  color: #2a3a4a;
+  text-align: center;
+  margin: 0.5em 0;
+}
+#qr {
+  display: flex;
+  justify-content: center;
+  margin: 1em 0;
+}
+#fileInfo, #fileMeta {
+  text-align: center;
+  margin: 0.5em 0;
+  color: #444;
+}
+@media (max-width: 500px) {
+  .container {
+    max-width: 98vw;
+    padding: 1em 0.5em;
+  }
+} 

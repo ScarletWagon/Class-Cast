@@ -1,0 +1,21 @@
+{
+  "name": "classcast",
+  "version": "1.0.0",
+  "description": "ClassCast: Secure LAN file sharing for teachers and students.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.0.0",
+    "multer": "^1.4.5-lts.1",
+    "sanitize-filename": "^1.6.3"
+  }
+} 

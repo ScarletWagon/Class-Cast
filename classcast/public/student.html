@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClassCast Student</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>ClassCast – Student</h1>
+    <form id="codeForm">
+      <label for="codeInput">Enter 6-digit code from your teacher:</label>
+      <input type="text" id="codeInput" maxlength="6" pattern="[0-9]{6}" required />
+      <button type="submit">Check</button>
+    </form>
+    <div id="fileSection" style="display:none;">
+      <div id="fileMeta"></div>
+      <button id="downloadBtn">Download File</button>
+    </div>
+    <div id="errorSection" class="error"></div>
+  </div>
+  <script src="student.js"></script>
+</body>
+</html> 

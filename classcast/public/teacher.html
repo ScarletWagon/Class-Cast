@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClassCast Teacher</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>ClassCast – Teacher</h1>
+    <form id="uploadForm">
+      <label for="fileInput">Select or drag a file to share (PDF, PPTX, PNG, JPEG, max 50MB):</label>
+      <input type="file" id="fileInput" name="file" accept=".pdf,.pptx,.png,.jpg,.jpeg" required />
+      <div id="dropZone">Drag & drop file here</div>
+      <div id="pinSection">
+        <label for="pinInput">Teacher PIN (optional):</label>
+        <input type="password" id="pinInput" placeholder="Enter PIN (if set)" />
+      </div>
+      <button type="submit">Upload</button>
+    </form>
+    <div id="resultSection" style="display:none;">
+      <h2>Share this code with students:</h2>
+      <div id="codeDisplay"></div>
+      <div id="qr"></div>
+      <div id="timer"></div>
+      <div id="fileInfo"></div>
+    </div>
+    <div id="errorSection" class="error"></div>
+  </div>
+  <script src="qrcode.min.js"></script>
+  <script src="teacher.js"></script>
+</body>
+</html> 
