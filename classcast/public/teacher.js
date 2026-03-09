@@ -14,6 +14,13 @@ const pinInput = document.getElementById('pinInput');
 
 let timerInterval = null;
 
+// Fetch tunnel URL once on load; fall back to current host if not available
+let baseUrl = `${window.location.protocol}//${window.location.host}`;
+fetch('/config')
+  .then(r => r.json())
+  .then(cfg => { if (cfg.tunnelUrl) baseUrl = cfg.tunnelUrl; })
+  .catch(() => {});  // silently ignore; baseUrl stays as LAN host
+
 // --- Drag & Drop ---
 dropZone.addEventListener('dragover', e => {
   e.preventDefault();
@@ -64,14 +71,19 @@ function showResult(data) {
   resultSection.style.display = '';
   codeDisplay.textContent = data.code;
   fileInfo.textContent = `File: ${data.file}`;
-  // Build download URL for QR
-  const url = `${window.location.protocol}//${window.location.host}/download?code=${data.code}`;
+  // Use tunnel URL if available, otherwise fall back to current LAN host
+  const url = `${baseUrl}/student?code=${data.code}`;
   qrDiv.innerHTML = '';
   new QRCode(qrDiv, {
     text: url,
     width: 180,
     height: 180
   });
+  // Show the URL under the QR code so teacher can copy/share it
+  const urlLabel = document.createElement('p');
+  urlLabel.style.cssText = 'word-break:break-all;font-size:0.85em;margin-top:6px;';
+  urlLabel.textContent = url;
+  qrDiv.appendChild(urlLabel);
   // Timer
   let seconds = data.expiresIn;
   timerDiv.textContent = formatTimer(seconds);

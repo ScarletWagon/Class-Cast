@@ -17,6 +17,15 @@ pinPrompt.style.display = 'none';
 codeForm.appendChild(pinPrompt);
 const pinInput = pinPrompt.querySelector('#pinInput');
 
+// Auto-fill code from URL query param (?code=123456) so QR scan works instantly
+const urlParams = new URLSearchParams(window.location.search);
+const codeFromUrl = urlParams.get('code');
+if (codeFromUrl && /^[0-9]{6}$/.test(codeFromUrl)) {
+  codeInput.value = codeFromUrl;
+  // Auto-submit after a short delay so the page has fully rendered
+  setTimeout(() => codeForm.requestSubmit(), 300);
+}
+
 codeForm.addEventListener('submit', async e => {
   e.preventDefault();
   errorSection.textContent = '';

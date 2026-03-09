@@ -10,9 +10,13 @@ const path = require('path');
 const https = require('https');
 const http = require('http');
 const rateLimit = require('express-rate-limit'); // npm install express-rate-limit
+const localtunnel = require('localtunnel'); // npm install localtunnel
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Holds the active tunnel URL so CORS can allow it dynamically
+let tunnelUrl = null;
 
 // --- LAN IP detection helper ---
 function getLocalIPs() {
@@ -29,7 +33,7 @@ function getLocalIPs() {
   return ips;
 }
 
-// --- CORS: Only allow requests from LAN IPs ---
+// --- CORS: Allow LAN IPs and the active tunnel URL ---
 const lanIPs = getLocalIPs();
 const allowedOrigins = lanIPs.map(ip => `http://${ip}:${PORT}`);
 allowedOrigins.push(`http://localhost:${PORT}`);
@@ -38,12 +42,21 @@ app.use(cors({
   origin: function(origin, callback) {
     // Allow requests with no origin (like curl, mobile apps)
     if (!origin) return callback(null, true);
+    // Allow the live tunnel URL (set after server starts)
+    if (tunnelUrl && origin === tunnelUrl) return callback(null, true);
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     return callback(new Error('CORS: Not allowed by ClassCast LAN policy'), false);
   }
 }));
+
+// --- localtunnel bypass: avoids the "click to continue" warning page ---
+// localtunnel shows a browser interstitial unless the bypass header is present.
+app.use((req, res, next) => {
+  res.setHeader('bypass-tunnel-reminder', 'true');
+  next();
+});
 
 // --- Multer setup for file uploads ---
 const multer = require('multer');
@@ -231,16 +244,42 @@ setInterval(() => {
 // --- Serve static frontend from public/ ---
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- Placeholder for further routes (upload/download) ---
+// --- /config: exposes tunnel URL to the frontend for QR code generation ---
+app.get('/config', (req, res) => {
+  res.json({ tunnelUrl: tunnelUrl || null });
+});
 
-// --- Start HTTP server (HTTPS optional, see below) ---
-http.createServer(app).listen(PORT, () => {
+// --- Start HTTP server then open a localtunnel for easy URL sharing ---
+const server = http.createServer(app);
+server.listen(PORT, async () => {
   console.log(`ClassCast server running on:`);
   lanIPs.forEach(ip => {
     console.log(`  http://${ip}:${PORT}/teacher`);
     console.log(`  http://${ip}:${PORT}/student`);
   });
   console.log(`  http://localhost:${PORT}/teacher`);
+
+  // Start localtunnel so students/teachers can use a friendly URL
+  try {
+    const tunnel = await localtunnel({ port: PORT, subdomain: 'classcast' });
+    tunnelUrl = tunnel.url;
+    console.log(`\n  🌐 Public tunnel URL (share this instead of IP):`);
+    console.log(`     Teacher: ${tunnel.url}/teacher`);
+    console.log(`     Student: ${tunnel.url}/student`);
+    console.log(`  ⚠️  Traffic still originates from your LAN machine.\n`);
+
+    tunnel.on('close', () => {
+      console.log('[localtunnel] Tunnel closed.');
+      tunnelUrl = null;
+    });
+    tunnel.on('error', err => {
+      console.warn('[localtunnel] Tunnel error:', err.message);
+      tunnelUrl = null;
+    });
+  } catch (err) {
+    console.warn('[localtunnel] Could not open tunnel (offline or subdomain taken):', err.message);
+    console.warn('  Falling back to LAN IP only.');
+  }
 });
 
 // --- Optional: HTTPS support (uncomment to use self-signed certs) ---
