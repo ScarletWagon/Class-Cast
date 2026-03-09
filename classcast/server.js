@@ -75,24 +75,9 @@ const storage = multer.diskStorage({
   }
 });
 
-// Allowed MIME types
-const ALLOWED_MIME = [
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation', // pptx
-  'image/png',
-  'image/jpeg'
-];
-
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
-  fileFilter: function (req, file, cb) {
-    if (ALLOWED_MIME.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type. Only PDF, PPTX, PNG, JPEG allowed.'));
-    }
-  }
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB — all file types allowed
 });
 
 // --- In-memory map: code -> file metadata/path/expiry ---
