@@ -10,7 +10,7 @@ const path = require('path');
 const https = require('https');
 const http = require('http');
 const rateLimit = require('express-rate-limit'); // npm install express-rate-limit
-const localtunnel = require('localtunnel'); // npm install localtunnel
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -42,21 +42,16 @@ app.use(cors({
   origin: function(origin, callback) {
     // Allow requests with no origin (like curl, mobile apps)
     if (!origin) return callback(null, true);
-    // Allow the live tunnel URL (set after server starts)
-    if (tunnelUrl && origin === tunnelUrl) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
+    // Normalise: strip trailing slash for comparison
+    const normalised = origin.replace(/\/$/, '');
+    // Allow the live cloudflared tunnel URL
+    if (tunnelUrl && normalised === tunnelUrl.replace(/\/$/, '')) return callback(null, true);
+    if (allowedOrigins.includes(normalised)) {
       return callback(null, true);
     }
     return callback(new Error('CORS: Not allowed by ClassCast LAN policy'), false);
   }
 }));
-
-// --- localtunnel bypass: avoids the "click to continue" warning page ---
-// localtunnel shows a browser interstitial unless the bypass header is present.
-app.use((req, res, next) => {
-  res.setHeader('bypass-tunnel-reminder', 'true');
-  next();
-});
 
 // --- Multer setup for file uploads ---
 const multer = require('multer');
@@ -244,14 +239,81 @@ setInterval(() => {
 // --- Serve static frontend from public/ ---
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- /config: exposes tunnel URL to the frontend for QR code generation ---
-app.get('/config', (req, res) => {
-  res.json({ tunnelUrl: tunnelUrl || null });
+// --- Route /teacher and /student to their HTML files
+app.get('/teacher', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'teacher.html'));
+});
+app.get('/student', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'student.html'));
 });
 
-// --- Start HTTP server then open a localtunnel for easy URL sharing ---
+// /config: exposes tunnel URL to the frontend for QR code generation
+// Returns { tunnelUrl, ready } — ready=false means tunnel is still connecting
+app.get('/config', (req, res) => {
+  res.json({ tunnelUrl: tunnelUrl || null, ready: !!tunnelUrl });
+});
+
+// --- Cloudflare tunnel manager: auto-restarts on exit, waits for Express to be ready ---
+let cfProcess = null;
+let tunnelRestartTimer = null;
+
+function startTunnel(retryCount = 0) {
+  // Hard limit: don't retry forever if something is fundamentally wrong
+  if (retryCount > 10) {
+    console.warn('[cloudflared] Too many restart attempts — giving up. LAN IP only.');
+    return;
+  }
+
+  console.log(`[cloudflared] Starting tunnel${retryCount > 0 ? ` (attempt ${retryCount + 1})` : ''}...`);
+
+  const cf = spawn('cloudflared', [
+    'tunnel', '--url', `http://localhost:${PORT}`,
+    '--no-autoupdate',
+    '--retries', '5',              // cloudflared retries its own connection attempts
+    '--grace-period', '10s'        // wait before killing active connections on shutdown
+  ]);
+
+  cfProcess = cf;
+  tunnelUrl = null; // clear stale URL on each (re)start
+
+  cf.stderr.on('data', chunk => {
+    const text = chunk.toString();
+    // Extract the trycloudflare.com URL the first time it appears in this session
+    const match = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+    if (match && !tunnelUrl) {
+      tunnelUrl = match[0];
+      console.log(`\n  🌐 Public tunnel URL (no password — share this with students):`);
+      console.log(`     Teacher: ${tunnelUrl}/teacher`);
+      console.log(`     Student: ${tunnelUrl}/student`);
+      console.log(`  ⚠️  Traffic still originates from your LAN machine.\n`);
+    }
+    // Surface connection errors to help with debugging
+    if (text.includes('ERR') || text.includes('error')) {
+      process.stdout.write(`[cloudflared] ${text}`);
+    }
+  });
+
+  cf.on('close', exitCode => {
+    cfProcess = null;
+    tunnelUrl = null;
+    if (exitCode === null || exitCode === 0) {
+      // Intentional shutdown (SIGINT/SIGTERM) — don't restart
+      return;
+    }
+    const delay = Math.min(2000 * (retryCount + 1), 30000); // backoff: 2s, 4s … max 30s
+    console.warn(`[cloudflared] Tunnel exited (code ${exitCode}). Restarting in ${delay / 1000}s...`);
+    tunnelRestartTimer = setTimeout(() => startTunnel(retryCount + 1), delay);
+  });
+
+  cf.on('error', err => {
+    console.warn('[cloudflared] Failed to spawn tunnel:', err.message);
+    console.warn('  Make sure cloudflared is installed: brew install cloudflared');
+  });
+}
+
+// --- Start HTTP server, then start the tunnel once Express is ready ---
 const server = http.createServer(app);
-server.listen(PORT, async () => {
+server.listen(PORT, () => {
   console.log(`ClassCast server running on:`);
   lanIPs.forEach(ip => {
     console.log(`  http://${ip}:${PORT}/teacher`);
@@ -259,36 +321,21 @@ server.listen(PORT, async () => {
   });
   console.log(`  http://localhost:${PORT}/teacher`);
 
-  // Start localtunnel so students/teachers can use a friendly URL
-  try {
-    const tunnel = await localtunnel({ port: PORT, subdomain: 'classcast' });
-    tunnelUrl = tunnel.url;
-    console.log(`\n  🌐 Public tunnel URL (share this instead of IP):`);
-    console.log(`     Teacher: ${tunnel.url}/teacher`);
-    console.log(`     Student: ${tunnel.url}/student`);
-    console.log(`  ⚠️  Traffic still originates from your LAN machine.\n`);
-
-    tunnel.on('close', () => {
-      console.log('[localtunnel] Tunnel closed.');
-      tunnelUrl = null;
-    });
-    tunnel.on('error', err => {
-      console.warn('[localtunnel] Tunnel error:', err.message);
-      tunnelUrl = null;
-    });
-  } catch (err) {
-    console.warn('[localtunnel] Could not open tunnel (offline or subdomain taken):', err.message);
-    console.warn('  Falling back to LAN IP only.');
-  }
+  // Short delay ensures Express is fully ready before cloudflared starts proxying
+  setTimeout(() => startTunnel(), 500);
 });
 
-// --- Optional: HTTPS support (uncomment to use self-signed certs) ---
-// const sslOptions = {
-//   key: fs.readFileSync('key.pem'),
-//   cert: fs.readFileSync('cert.pem')
-// };
-// https.createServer(sslOptions, app).listen(3443, () => {
-//   console.log('HTTPS server running on port 3443');
-// });
+// --- Clean up tunnel on process exit ---
+function shutdown() {
+  if (tunnelRestartTimer) clearTimeout(tunnelRestartTimer);
+  if (cfProcess) {
+    cfProcess.removeAllListeners('close'); // prevent restart on intentional kill
+    cfProcess.kill();
+  }
+  process.exit(0);
+}
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+
 
 // --- End of server.js basic setup --- 

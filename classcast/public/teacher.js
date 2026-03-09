@@ -14,12 +14,30 @@ const pinInput = document.getElementById('pinInput');
 
 let timerInterval = null;
 
-// Fetch tunnel URL once on load; fall back to current host if not available
+// Fetch tunnel URL once on load; fall back to current host if not available.
+// Polls until the tunnel is ready (cloudflared can take a few seconds to connect).
 let baseUrl = `${window.location.protocol}//${window.location.host}`;
-fetch('/config')
-  .then(r => r.json())
-  .then(cfg => { if (cfg.tunnelUrl) baseUrl = cfg.tunnelUrl; })
-  .catch(() => {});  // silently ignore; baseUrl stays as LAN host
+
+async function fetchConfig(attemptsLeft = 20) {
+  try {
+    const r = await fetch('/config');
+    const cfg = await r.json();
+    if (cfg.tunnelUrl) {
+      baseUrl = cfg.tunnelUrl;
+      return;
+    }
+  } catch (_) {}
+  // Not ready yet — retry after 1.5s (up to ~30s total)
+  if (attemptsLeft > 0) {
+    await new Promise(res => setTimeout(res, 1500));
+    return fetchConfig(attemptsLeft - 1);
+  }
+  // Gave up — baseUrl stays as LAN host, which still works on local network
+}
+
+// Kick off config fetch immediately; upload can happen before it resolves,
+// showResult() will await it before building the QR URL.
+const configReady = fetchConfig();
 
 // --- Drag & Drop ---
 dropZone.addEventListener('dragover', e => {
@@ -71,20 +89,32 @@ function showResult(data) {
   resultSection.style.display = '';
   codeDisplay.textContent = data.code;
   fileInfo.textContent = `File: ${data.file}`;
-  // Use tunnel URL if available, otherwise fall back to current LAN host
-  const url = `${baseUrl}/student?code=${data.code}`;
-  qrDiv.innerHTML = '';
-  new QRCode(qrDiv, {
-    text: url,
-    width: 180,
-    height: 180
+
+  // Wait for tunnel URL to be confirmed before generating QR/link
+  configReady.then(() => {
+    const url = `${baseUrl}/student?code=${data.code}`;
+    qrDiv.innerHTML = '';
+    new QRCode(qrDiv, { text: url, width: 180, height: 180 });
+
+    const urlLabel = document.createElement('p');
+    urlLabel.className = 'qr-url';
+    urlLabel.textContent = url;
+    qrDiv.appendChild(urlLabel);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-btn';
+    copyBtn.textContent = 'Copy link';
+    copyBtn.type = 'button';
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(url).then(() => {
+        copyBtn.textContent = '✓ Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy link'; }, 2000);
+      });
+    });
+    qrDiv.appendChild(copyBtn);
   });
-  // Show the URL under the QR code so teacher can copy/share it
-  const urlLabel = document.createElement('p');
-  urlLabel.style.cssText = 'word-break:break-all;font-size:0.85em;margin-top:6px;';
-  urlLabel.textContent = url;
-  qrDiv.appendChild(urlLabel);
-  // Timer
+
+  // Start timer immediately regardless
   let seconds = data.expiresIn;
   timerDiv.textContent = formatTimer(seconds);
   if (timerInterval) clearInterval(timerInterval);

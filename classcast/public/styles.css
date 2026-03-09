@@ -69,8 +69,32 @@ button:hover {
 }
 #qr {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   margin: 1em 0;
+  gap: 0.6em;
+}
+#qr .qr-url {
+  font-size: 0.78em;
+  color: #555;
+  word-break: break-all;
+  text-align: center;
+  max-width: 220px;
+  line-height: 1.4;
+}
+#qr .copy-btn {
+  font-size: 0.82em;
+  padding: 0.35em 1em;
+  background: #f0f0f5;
+  color: #007bff;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+#qr .copy-btn:hover {
+  background: #007bff;
+  color: #fff;
 }
 #fileInfo, #fileMeta {
   text-align: center;
