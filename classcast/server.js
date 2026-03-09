@@ -9,8 +9,9 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
-const rateLimit = require('express-rate-limit'); // npm install express-rate-limit
+const rateLimit = require('express-rate-limit');
 const { spawn } = require('child_process');
+const { bin: cloudflaredBin } = require('cloudflared'); // cross-platform binary path
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -266,7 +267,7 @@ function startTunnel(retryCount = 0) {
 
   console.log(`[cloudflared] Starting tunnel${retryCount > 0 ? ` (attempt ${retryCount + 1})` : ''}...`);
 
-  const cf = spawn('cloudflared', [
+  const cf = spawn(cloudflaredBin, [
     'tunnel', '--url', `http://localhost:${PORT}`,
     '--no-autoupdate',
     '--retries', '5',              // cloudflared retries its own connection attempts
@@ -307,7 +308,7 @@ function startTunnel(retryCount = 0) {
 
   cf.on('error', err => {
     console.warn('[cloudflared] Failed to spawn tunnel:', err.message);
-    console.warn('  Make sure cloudflared is installed: brew install cloudflared');
+    console.warn('  Try running: npm install');
   });
 }
 
